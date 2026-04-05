@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auto Dealer KI App V3</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+</head>
+<body>
+  <header class="hero">
+    <div>
+      <p class="eyebrow">V3 · Händler-Prototyp · lokal im Browser</p>
+      <h1>Auto Dealer KI App V3</h1>
+      <p class="subtitle">
+        Upload oder Kamera, Browser-KI für Fahrzeugart, Fahrzeugdaten mit Marken-/Modell-Vorschlägen,
+        Preis- und Exportcheck, Inseratstext, JSON-Export und mobile Nutzung.
+      </p>
+    </div>
+    <div class="hero-actions">
+      <button id="demoBtn" class="secondary">Demo laden</button>
+      <button id="resetBtn" class="ghost">Reset</button>
+    </div>
+  </header>
+
+  <main class="app-grid">
+    <section class="card">
+      <h2>1. Bild laden</h2>
+      <div class="upload-grid">
+        <label class="upload-tile">
+          <input id="fileInput" type="file" accept="image/*" />
+          <span>Bild auswählen</span>
+          <small>Aus Galerie oder Dateien</small>
+        </label>
+        <label class="upload-tile">
+          <input id="cameraInput" type="file" accept="image/*" capture="environment" />
+          <span>Kamera</span>
+          <small>Direkt fotografieren</small>
+        </label>
+      </div>
+
+      <div class="preview-wrap">
+        <img id="previewImage" alt="Vorschau" />
+        <canvas id="overlayCanvas"></canvas>
+        <div id="emptyPreview" class="empty-preview">Noch kein Bild geladen</div>
+      </div>
+
+      <div class="action-row">
+        <button id="analyzeBtn">KI-Analyse starten</button>
+      </div>
+
+      <div id="statusBox" class="status neutral">Bereit. Bild laden und Analyse starten.</div>
+    </section>
+
+    <section class="card">
+      <h2>2. KI-Ergebnis</h2>
+      <div class="metric-grid">
+        <div class="metric"><span>Fahrzeugart</span><strong id="detectedClass">–</strong></div>
+        <div class="metric"><span>Sicherheit</span><strong id="detectedScore">–</strong></div>
+        <div class="metric"><span>Markenhinweis</span><strong id="brandHint">–</strong></div>
+        <div class="metric"><span>Preis grob</span><strong id="priceEstimate">–</strong></div>
+        <div class="metric"><span>Export-Score</span><strong id="exportScore">–</strong></div>
+        <div class="metric"><span>Zustand</span><strong id="conditionScore">–</strong></div>
+      </div>
+      <div id="detectionsList" class="chip-row"></div>
+      <p class="notice">
+        COCO-SSD erkennt hier vor allem die Fahrzeugart. Marke, Modell und Motor sind Vorschläge aus den
+        Eingaben und einer lokalen Liste – nicht aus einem spezialisierten Fahrzeug-KI-Modell.
+      </p>
+    </section>
+
+    <section class="card wide">
+      <h2>3. Fahrzeugdaten</h2>
+      <div class="form-grid">
+        <label>Marke
+          <input id="brandInput" type="text" list="brandSuggestions" placeholder="z. B. BMW" />
+        </label>
+
+        <label>Modell
+          <input id="modelInput" type="text" list="modelSuggestions" placeholder="z. B. 320d Touring" />
+        </label>
+
+        <label>Motorisierung
+          <input id="engineInput" type="text" list="engineSuggestions" placeholder="z. B. 2.0 Diesel 190 PS" />
+        </label>
+
+        <label>Kraftstoff
+          <select id="fuelInput">
+            <option value="">Bitte wählen</option>
+            <option>Benzin</option>
+            <option>Diesel</option>
+            <option>Hybrid</option>
+            <option>Elektro</option>
+            <option>LPG / CNG</option>
+          </select>
+        </label>
+
+        <label>Getriebe
+          <select id="transmissionInput">
+            <option value="">Bitte wählen</option>
+            <option>Schaltgetriebe</option>
+            <option>Automatik</option>
+          </select>
+        </label>
+
+        <label>Baujahr
+          <input id="yearInput" type="number" min="1980" max="2035" placeholder="2017" />
+        </label>
+
+        <label>Kilometerstand
+          <input id="mileageInput" type="number" min="0" step="1000" placeholder="189000" />
+        </label>
+
+        <label>Farbe
+          <input id="colorInput" type="text" placeholder="Schwarz" />
+        </label>
+
+        <label>Zustand
+          <select id="conditionInput">
+            <option value="gut">Gut</option>
+            <option value="gebraucht">Gebraucht</option>
+            <option value="beschädigt">Beschädigt</option>
+            <option value="export">Export / Bastler</option>
+          </select>
+        </label>
+
+        <label>Standort / Radius (km)
+          <input id="radiusInput" type="number" min="5" max="1000" step="5" value="100" />
+        </label>
+
+        <label>Vorbesitzer
+          <input id="ownersInput" type="number" min="0" max="20" placeholder="2" />
+        </label>
+
+        <label>TÜV / HU bis
+          <input id="tuvInput" type="month" />
+        </label>
+      </div>
+
+      <datalist id="brandSuggestions"></datalist>
+      <datalist id="modelSuggestions"></datalist>
+      <datalist id="engineSuggestions"></datalist>
+
+      <h3>Schäden / Ausstattung</h3>
+      <div class="check-grid">
+        <label><input type="checkbox" class="damageCheck" value="Kratzer" /> Kratzer</label>
+        <label><input type="checkbox" class="damageCheck" value="Beule" /> Beule</label>
+        <label><input type="checkbox" class="damageCheck" value="Unfall" /> Unfall</label>
+        <label><input type="checkbox" class="damageCheck" value="Motorschaden" /> Motorschaden</label>
+        <label><input type="checkbox" class="damageCheck" value="Getriebeschaden" /> Getriebeschaden</label>
+        <label><input type="checkbox" class="damageCheck" value="Nicht fahrbereit" /> Nicht fahrbereit</label>
+        <label><input type="checkbox" class="damageCheck" value="Rost" /> Rost</label>
+        <label><input type="checkbox" class="damageCheck" value="Airbag offen" /> Airbag offen</label>
+        <label><input type="checkbox" class="featureCheck" value="Navi" /> Navi</label>
+        <label><input type="checkbox" class="featureCheck" value="Leder" /> Leder</label>
+        <label><input type="checkbox" class="featureCheck" value="Panorama" /> Panorama</label>
+        <label><input type="checkbox" class="featureCheck" value="Xenon / LED" /> Xenon / LED</label>
+      </div>
+
+      <label>Notizen
+        <textarea id="notesInput" rows="4" placeholder="z. B. M Paket, läuft gut, Export möglich, kleine Kratzer hinten links"></textarea>
+      </label>
+
+      <div class="action-row">
+        <button id="calculateBtn">Berechnen + Inserat</button>
+        <button id="saveLocalBtn" class="secondary">Lokal speichern</button>
+        <button id="loadLocalBtn" class="secondary">Lokal laden</button>
+        <button id="jsonBtn" class="ghost">JSON Export</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Marktcheck</h2>
+      <div id="compareBox" class="compare-box">Noch keine Berechnung.</div>
+    </section>
+
+    <section class="card">
+      <h2>5. VIN / carVertical Vorbereitung</h2>
+      <div class="form-grid one">
+        <label>FIN / VIN
+          <input id="vinInput" type="text" placeholder="z. B. WBA..." />
+        </label>
+      </div>
+      <div id="vinBox" class="compare-box">
+        Noch keine VIN hinterlegt.
+      </div>
+      <div class="action-row">
+        <button id="vinBtn" class="secondary">VIN prüfen</button>
+      </div>
+    </section>
+
+    <section class="card wide">
+      <h2>6. Fertiger Inseratstext</h2>
+      <textarea id="listingOutput" rows="14" placeholder="Hier erscheint der fertige Text."></textarea>
+      <div class="action-row">
+        <button id="copyBtn" class="secondary">Text kopieren</button>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    Diese App läuft lokal im Browser. Für echte Marken-/Modell-/Motor-KI und VIN-Berichte brauchst du später
+    eine spezialisierte Fahrzeugdatenbank, ein Backend oder eine API-Anbindung.
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
